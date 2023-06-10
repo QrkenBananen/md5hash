@@ -1,0 +1,14 @@
+[package]
+name = "md5hash"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A no_std MD5 hash implementation in safe Rust"
+repository = "https://github.com/QrkenBananen/md5hash"
+readme = "README.md"
+keywords = ["md5", "hash"]
+categories = ["algorithms", "no-std::no-alloc", "no-std"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
