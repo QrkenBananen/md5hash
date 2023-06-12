@@ -72,7 +72,7 @@ pub struct MD5Hasher {
 
 impl MD5Hasher {
     /// Creates a new [`MD5Hasher`] instance.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             message_len: 0,
             state: [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476],
@@ -118,7 +118,7 @@ impl MD5Hasher {
     /// Returns how many bytes of the internal buffer has been filled.
     ///
     /// This method assumes that the buffer filled length is always related to the original message length.
-    fn buffer_fill_len(&self) -> usize {
+    const fn buffer_fill_len(&self) -> usize {
         (self.message_len % 64) as usize
     }
 
