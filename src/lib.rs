@@ -71,8 +71,9 @@ pub struct MD5Hasher {
 }
 
 impl MD5Hasher {
-    /// Creates a new [`MD5Hasher`] instance.
-    pub fn new() -> Self {
+    /// Creates a new [`MD5Hasher`] instance
+    #[inline(always)]
+    pub const fn new() -> Self {
         Self {
             message_len: 0,
             state: [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476],
@@ -84,6 +85,7 @@ impl MD5Hasher {
     ///
     /// The bytes are copied into a buffer in chunks of 64 bytes, and is then hashed.
     /// If there is not 64 bytes available the copied bytes are kept until they can be hashed.
+    #[inline(always)]
     pub fn digest(&mut self, bytes: &impl AsRef<[u8]>) {
         self.digest_inner(bytes.as_ref());
     }
@@ -123,55 +125,71 @@ impl MD5Hasher {
     }
 
     #[allow(unused_assignments)]
+    #[inline(always)]
     fn hash_buffer(&mut self) {
-        let mut x = u32_buffer_from_u8_buffer(&self.buffer);
+        let mut x = U8ToU32Converter::new(&self.buffer)
+            .next()
+            .expect("Internal buffer always contains 64 bytes.");
         digest_buffer(x, &mut self.state);
 
         x.zero();
     }
 
+    #[inline(always)]
     fn pad_buffer(&mut self) {
         match self.buffer_fill_len() {
             i @ 0..=55 => {
                 self.buffer[i..56].copy_from_slice(&PADDING[..(64 - 8 - i)]);
             }
 
-            i @ 56..=120 => {
+            i @ _ => {
                 self.buffer[i..64].copy_from_slice(&PADDING[..(64 - i)]);
                 self.hash_buffer();
                 self.buffer[..56].copy_from_slice(&PADDING[1..57]);
             }
-
-            _ => unreachable!(),
         }
     }
 
+    #[inline(always)]
     fn append_length(&mut self) {
         self.buffer[56..].copy_from_slice(&(self.message_len << 3).to_le_bytes());
     }
 
+    #[inline(always)]
     fn digest_inner(&mut self, mut bytes: &[u8]) {
         while !bytes.is_empty() {
             let len = self.buffer_fill_len();
-            let min = core::cmp::min(64 - len, bytes.len());
-            self.buffer[len..(len + min)].copy_from_slice(&bytes[..min]);
+            if bytes.len() >= 64 && len % 64 == 0 {
+                let tmp_buffer_len = bytes.len() - (bytes.len() % 64);
+                let converter = U8ToU32Converter::new(&bytes[..tmp_buffer_len]);
+                for buf in converter {
+                    digest_buffer(buf, &mut self.state);
+                }
+                self.message_len = self.message_len.wrapping_add(tmp_buffer_len as u64);
+                bytes = &bytes[tmp_buffer_len..];
+            } else {
+                let min = core::cmp::min(64 - len, bytes.len());
+                self.buffer[len..(len + min)].copy_from_slice(&bytes[..min]);
 
-            self.message_len = self.message_len.wrapping_add(min as u64);
+                self.message_len = self.message_len.wrapping_add(min as u64);
 
-            if self.buffer_fill_len() == 0 {
-                self.hash_buffer();
+                if self.buffer_fill_len() == 0 {
+                    self.hash_buffer();
+                }
+                bytes = &bytes[min..];
             }
-            bytes = &bytes[min..];
         }
     }
 }
 
 impl Default for MD5Hasher {
+    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[inline(always)]
 fn digest_buffer(x: [u32; 16], state: &mut [u32; 4]) {
     let [mut a, mut b, mut c, mut d] = state;
 
@@ -331,19 +349,42 @@ fn ii(a: &mut u32, b: u32, c: u32, d: u32, k: u32, s: u32, iv: u32) {
     ))
 }
 
-fn u32_buffer_from_u8_buffer(buffer: &[u8; 64]) -> [u32; 16] {
-    let mut x = [0u32; 16];
-    x.iter_mut()
-        .zip(buffer.chunks(4))
-        .for_each(|(x_inner, buffer_chunk)| {
-            *x_inner = u32::from_le_bytes([
-                buffer_chunk[0],
-                buffer_chunk[1],
-                buffer_chunk[2],
-                buffer_chunk[3],
-            ]);
-        });
-    x
+struct U8ToU32Converter<'a> {
+    bytes: &'a [u8],
+}
+
+impl<'a> U8ToU32Converter<'a> {
+    #[inline(always)]
+    fn new(bytes: &'a [u8]) -> Self {
+        assert!(bytes.len() % 64 == 0);
+        Self { bytes: bytes }
+    }
+}
+
+impl<'a> Iterator for U8ToU32Converter<'a> {
+    type Item = [u32; 16];
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        assert!(self.bytes.len() % 64 == 0);
+        if self.bytes.len() >= 64 {
+            let mut x = [0u32; 16];
+            x.iter_mut()
+                .zip(self.bytes.chunks_exact(4))
+                .for_each(|(x_inner, buffer_chunk)| {
+                    *x_inner = u32::from_le_bytes([
+                        buffer_chunk[0],
+                        buffer_chunk[1],
+                        buffer_chunk[2],
+                        buffer_chunk[3],
+                    ]);
+                });
+            self.bytes = &self.bytes[64..];
+            Some(x)
+        } else {
+            None
+        }
+    }
 }
 
 /// The hash result given by the [`MD5Hasher`] type after calling the [finish] method.
