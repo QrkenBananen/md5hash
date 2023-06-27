@@ -7,7 +7,7 @@ description = "A no_std MD5 hash implementation in safe Rust"
 repository = "https://github.com/QrkenBananen/md5hash"
 readme = "README.md"
 keywords = ["md5", "hash"]
-categories = ["algorithms", "no-std::no-alloc", "no-std"]
+categories = ["algorithms", "no-std::no-alloc", "no-std", "cryptography"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
